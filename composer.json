@@ -1,0 +1,16 @@
+{
+    "name": "arsonik/secret-redirect",
+    "description": "hidding ad redirection",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Florian Morello",
+            "email": "arsonik@me.com"
+        }
+    ],
+    "autoload": {
+        "classmap": ["src/"]
+    },
+    "require": {}
+}
