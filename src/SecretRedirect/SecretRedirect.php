@@ -1,4 +1,5 @@
 <?php
+namespace SecretRedirect;
 
 /**
  * Class SecretRedirect
