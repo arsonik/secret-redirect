@@ -31,29 +31,43 @@ class SecretRedirect {
      */
     public $mode = SecretRedirect::MODE_REDIRECT;
 
+    /**
+     * Allowed time for the request to respond
+     * @var float
+     */
+    public $timeout = 5.0;
+
+    /**
+     * @var bool
+     */
+    public $forwardCookies = true;
+
     private function vserver($name) {
         return isset($_SERVER[$name]) ? $_SERVER[$name] : null;
     }
 
     /**
-     * @param $url string
+     * @param $url string Url that will be requested passing client info, MUST return a "Location: xxx" header
      * @param $fallbackUrl string Define an url to redirect the traffic to if the url is unresponsive
-     * @return mixed
+     * @return string|bool
      */
-    public function redirect($url, $fallbackUrl) {
+    public function redirect($url, $fallbackUrl = null) {
         if ($this->serverUsesXHttpForwardedFor && $this->vserver('HTTP_X_FORWARDED_FOR')) {
             $clientIp = $this->vserver('HTTP_X_FORWARDED_FOR');
         } else {
             $clientIp = $this->vserver('REMOTE_ADDR');
         }
 
-        $cookies = array_filter($_COOKIE, function ($k) {
-            return strpos($k, $this->cookiePrefix) === 0;
-        }, ARRAY_FILTER_USE_KEY);
+        $cookies = [];
 
-        array_walk($cookies, function(&$v, $k) {
-            $v = "$k=". str_replace($this->cookiePrefix, '', $v);
-        });
+        if ($this->forwardCookies) {
+            $cookies = array_filter($_COOKIE, function ($k) {
+                return strpos($k, $this->cookiePrefix) === 0;
+            }, ARRAY_FILTER_USE_KEY);
+            array_walk($cookies, function(&$v, $k) {
+                $v = "$k=". str_replace($this->cookiePrefix, '', $v);
+            });
+        }
 
         $headers = array_filter([
             'User-Agent' => $this->vserver('HTTP_USER_AGENT'),
@@ -68,7 +82,7 @@ class SecretRedirect {
 
         $context = stream_context_create([
             'http' => [
-                'timeout' => 6,
+                'timeout' => $this->timeout,
                 'follow_location' => 0,
                 'header' => implode("\n", $headers),
                 'ignore_errors' => true,
@@ -83,16 +97,20 @@ class SecretRedirect {
 
             $sc = 'Set-Cookie: ';
             foreach ($metas['wrapper_data'] as &$header) {
-                if (strpos($header, $sc) === 0) {
+                if ($this->forwardCookies && strpos($header, $sc) === 0) {
                     header(str_replace($sc, $sc . $this->cookiePrefix, $header), false);
-                } else if (strpos($header, 'Location: ') === 0) {
+                } elseif (strpos($header, 'Location: ') === 0) {
                     $result = $header;
                 }
             }
         }
 
         if (is_null($result)) {
-            $result = 'Location: ' . $fallbackUrl;
+            if ($this->mode === SecretRedirect::MODE_REDIRECT && $fallbackUrl) {
+                $result = 'Location: ' . $fallbackUrl;
+            } else {
+                return false;
+            }
         }
 
         if ($this->mode === SecretRedirect::MODE_REDIRECT) {
