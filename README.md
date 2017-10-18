@@ -30,7 +30,7 @@ $url = $secret->location('http://ads-server.tld/campaign?id=xxxx', 'http://fallb
 ```php
 $secret = new SecretRedirect();
 $secret->cookiePrefix = 'm2sa_';
-$secret->content('http://ads-server.tld/campaign?id=xxxx');
+$content = $secret->content('http://ads-server.tld/campaign?id=xxxx');
 ```
 
 
