@@ -7,9 +7,6 @@ namespace SecretRedirect;
  * @author Florian Morello <arsonik@me.com>
  */
 class SecretRedirect {
-    const MODE_RETURN = 1;
-    const MODE_REDIRECT = 2;
-
     /**
      * Define cookies prefix
      * 2-way forwarding
@@ -27,12 +24,6 @@ class SecretRedirect {
     public $serverUsesXHttpForwardedFor = true;
 
     /**
-     * Define if the class should redirect or return the location
-     * @var int
-     */
-    public $mode = SecretRedirect::MODE_REDIRECT;
-
-    /**
      * Allowed time for the request to respond
      * @var float
      */
@@ -48,11 +39,14 @@ class SecretRedirect {
     }
 
     /**
-     * @param $url string Url that will be requested passing client info, MUST return a "Location: xxx" header
-     * @param $fallbackUrl string Define an url to redirect the traffic to if the url is unresponsive
-     * @return string|bool
+     * Raw request
+     * avoid using it
+     *
+     * @param $url
+     * @param $context array Override stream context param
+     * @return array|bool
      */
-    public function redirect($url, $fallbackUrl = null) {
+    function request($url, array $context = []) {
         if ($this->serverUsesXHttpForwardedFor && $this->vserver('HTTP_X_FORWARDED_FOR')) {
             $clientIp = $this->vserver('HTTP_X_FORWARDED_FOR');
         } else {
@@ -63,8 +57,8 @@ class SecretRedirect {
 
         if ($this->forwardCookies) {
             $cookies = array_filter($_COOKIE, function ($k) {
-                return strpos($k, $this->cookiePrefix) === 0;
-            }, ARRAY_FILTER_USE_KEY);
+                    return strpos($k, $this->cookiePrefix) === 0;
+                }, ARRAY_FILTER_USE_KEY);
             array_walk($cookies, function(&$v, $k) {
                 $v = "$k=". str_replace($this->cookiePrefix, '', $v);
             });
@@ -81,44 +75,111 @@ class SecretRedirect {
 
         array_walk($headers, function(&$v, $k) { $v = "$k: $v"; });
 
-        $context = stream_context_create([
-            'http' => [
-                'timeout' => $this->timeout,
-                'follow_location' => 0,
-                'header' => implode("\n", $headers),
-                'ignore_errors' => true,
-            ]
-        ]);
+        $context = stream_context_create(array_merge([
+                'http' => [
+                    'timeout' => $this->timeout,
+                    'follow_location' => 0,
+                    'header' => implode("\n", $headers),
+                    'ignore_errors' => true,
+                ]
+            ], $context));
 
-        $result = null;
+        $result = [
+            'data' => null,
+            'metas' => null,
+        ];
         $stream = @fopen($url, "r", false, $context);
         if ($stream) {
-            $metas = stream_get_meta_data($stream);
+            $result['metas'] = stream_get_meta_data($stream);
+            $result['data'] = stream_get_contents($stream);
             fclose($stream);
 
-            $sc = 'Set-Cookie: ';
-            foreach ($metas['wrapper_data'] as &$header) {
-                if ($this->forwardCookies && strpos($header, $sc) === 0) {
-                    header(str_replace($sc, $sc . $this->cookiePrefix, $header), false);
-                } elseif (strpos($header, 'Location: ') === 0) {
-                    $result = $header;
+            if ($this->forwardCookies) {
+                $result['cookies'] = [];
+                // Loop through headers
+                foreach ($this->extractHeaders($result['metas'], 'Set-Cookie') as $header) {
+                    // remove domain specific cookie
+                    $header = preg_replace('/[Dd]omain=[^;]+(;\s*|$)/', '', $header);
+                    // remove Secure, HttpOnly attributes
+                    $header = preg_replace('/(Secure|HttpOnly)(;\s*|$)/', '', $header);
+                    $result['cookies'][] = $header;
+
+                    header(str_replace('Set-Cookie: ', 'Set-Cookie: '. $this->cookiePrefix, $header), false);
                 }
             }
         }
 
-        if (is_null($result)) {
-            if ($this->mode === SecretRedirect::MODE_REDIRECT && $fallbackUrl) {
-                $result = 'Location: ' . $fallbackUrl;
-            } else {
-                return false;
-            }
+        return $result;
+    }
+
+    /**
+     * Extract header from stream_get_meta_data response
+     *
+     * @param $metas
+     * @param $name
+     * @return array
+     */
+    private function extractHeaders($metas, $name) {
+        if (!is_array($metas) || !isset($metas['wrapper_data'])) {
+            return [];
         }
 
-        if ($this->mode === SecretRedirect::MODE_REDIRECT) {
-            header($result, true, 302);
-            return true;
+        return array_filter($metas['wrapper_data'], function($header) use ($name) {
+            return strpos($header, $name . ': ') === 0;
+        });
+    }
+
+    /**
+     * @param $url string Url that will be requested passing client info, MUST return a "Location: xxx" header
+     * @param $fallbackUrl string Define an url to redirect the traffic to if the url is unresponsive
+     * @return bool
+     */
+    public function redirect($url, $fallbackUrl = null) {
+        $result = $this->request($url);
+
+        $locations = $this->extractHeaders($result['metas'], 'Location');
+        if ($locations) {
+            $redirect = str_replace('Location: ', '', current($locations));
         } else {
-            return str_replace('Location: ', '', $result);
+            $redirect = $fallbackUrl;
         }
+
+        if ($redirect) {
+            header($redirect, true, 302);
+            return true;
+        }
+
+        return false;
+    }
+
+
+    /**
+     * Return header Location value
+     *
+     * @param $url
+     * @return mixed
+     */
+    public function location($url, $fallbackUrl = null) {
+        $result = $this->request($url);
+
+        $locations = $this->extractHeaders($result['metas'], 'Location');
+        if ($locations) {
+            $redirect = str_replace('Location: ', '', current($locations));
+        } else {
+            $redirect = $fallbackUrl;
+        }
+
+        return $redirect;
+    }
+
+    /**
+     * Retrieve content
+     *
+     * @param $url
+     * @return mixed
+     */
+    public function content($url) {
+        $result = $this->request($url, ['http' => ['follow_location' => 1]]);
+        return $result['data'];
     }
 }
