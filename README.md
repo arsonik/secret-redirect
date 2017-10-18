@@ -1,7 +1,8 @@
 # secret-redirect
+A discrete way of forwarding client request.
 
 
-### Installation
+## Installation
 ```sh
 composer require arsonik/secret-redirect
 ```
@@ -9,10 +10,33 @@ composer require arsonik/secret-redirect
 require './vendor/autoload.php';
 ```
 
-### Usage
+## Usage
+### Forward client with the Location header (302 status)
 ```php
 $secret = new SecretRedirect();
 $secret->cookiePrefix = 'm2sa_';
 $secret->redirect('http://ads-server.tld/campaign?id=xxxx', 'http://fallback.tld/azz');
 exit;
 ```
+
+### Returns Location header url
+```php
+$secret = new SecretRedirect();
+$secret->cookiePrefix = 'm2sa_';
+$url = $secret->location('http://ads-server.tld/campaign?id=xxxx', 'http://fallback.tld/azz');
+```
+
+### Returns destination page content
+```php
+$secret = new SecretRedirect();
+$secret->cookiePrefix = 'm2sa_';
+$secret->content('http://ads-server.tld/campaign?id=xxxx');
+```
+
+
+## Optional configuration
+### `SecretRedirect` class parameters
+- `cookiePrefix` String 
+- `forwardCookies` Boolean
+- `serverUsesXHttpForwardedFor` Boolean 
+- `timeout` Float 
