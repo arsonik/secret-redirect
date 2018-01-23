@@ -1,6 +1,7 @@
 # secret-redirect
-A discrete way of forwarding client request.
+[![Latest Stable Version](https://img.shields.io/packagist/v/arsonik/secret-redirect.svg)](https://packagist.org/packages/arsonik/secret-redirect)
 
+A discrete way of forwarding client request.
 
 ## Installation
 ```sh

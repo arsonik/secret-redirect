@@ -47,10 +47,16 @@ class SecretRedirect {
      * @return array|bool
      */
     function request($url, array $context = []) {
-        if ($this->serverUsesXHttpForwardedFor && $this->vserver('HTTP_X_FORWARDED_FOR')) {
-            $clientIp = $this->vserver('HTTP_X_FORWARDED_FOR');
-        } else {
-            $clientIp = $this->vserver('REMOTE_ADDR');
+        $clientIp = $this->vserver('REMOTE_ADDR');
+        if ($this->serverUsesXHttpForwardedFor) {
+            if (function_exists('apache_request_headers')) {
+                $requestHeaders = apache_request_headers();
+                if (isset($requestHeaders['X-Forwarded-For'])) {
+                    $clientIp = $requestHeaders['X-Forwarded-For'];
+                }
+            } else if ($this->vserver('HTTP_X_FORWARDED_FOR')) {
+                $clientIp = $this->vserver('HTTP_X_FORWARDED_FOR');
+            }
         }
 
         $cookies = [];
