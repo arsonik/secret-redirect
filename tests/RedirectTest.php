@@ -50,4 +50,36 @@ final class RedirectTest extends TestCase
         $content = $secret->content('http://google.fr');
         $this->assertGreaterThan(0, preg_match('!<title>Google</title>!', $content), 'Cannot find <title>');
     }
+
+    public function testSimpleIpForwardResolution()
+    {
+        $secret = new SecretRedirect();
+        $_SERVER['REMOTE_ADDR'] = '66.249.88.141';
+        $_SERVER['HTTP_X_FORWARDED_FOR'] = '191.47.176.212';
+        $this->assertEquals('191.47.176.212', $secret->forwardedClientIp());
+    }
+
+    public function testPrivateIpForwardResolution()
+    {
+        $secret = new SecretRedirect();
+        $_SERVER['REMOTE_ADDR'] = '66.249.88.141';
+        $_SERVER['HTTP_X_FORWARDED_FOR'] = '192.168.0.1';
+        $this->assertEquals(null, $secret->forwardedClientIp());
+    }
+
+    public function testIpv6ForwardResolution()
+    {
+        $secret = new SecretRedirect();
+        $_SERVER['REMOTE_ADDR'] = '66.249.88.141';
+        $_SERVER['HTTP_X_FORWARDED_FOR'] = '2804:18:401f:b960:4e96:4c13:efc:5dbe';
+        $this->assertEquals('2804:18:401f:b960:4e96:4c13:efc:5dbe', $secret->forwardedClientIp());
+    }
+
+    public function testMultipleIpForwardResolution()
+    {
+        $secret = new SecretRedirect();
+        $_SERVER['REMOTE_ADDR'] = '66.249.88.141';
+        $_SERVER['HTTP_X_FORWARDED_FOR'] = '191.47.176.212,192.168.0.1';
+        $this->assertEquals('191.47.176.212', $secret->forwardedClientIp());
+    }
 }

@@ -39,6 +39,29 @@ class SecretRedirect {
     }
 
     /**
+     * @return string|null forwarded ip
+     */
+    public function forwardedClientIp() {
+        $forward = null;
+        if (function_exists('apache_request_headers')) {
+            $requestHeaders = apache_request_headers();
+            if (isset($requestHeaders['X-Forwarded-For'])) {
+                $forward = $requestHeaders['X-Forwarded-For'];
+            }
+        } else if ($this->vserver('HTTP_X_FORWARDED_FOR')) {
+            $forward = $this->vserver('HTTP_X_FORWARDED_FOR');
+        }
+        if ($forward) {
+            foreach (preg_split('/, ?/', $forward) as $ip) {
+                if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+                    return $ip;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
      * Raw request
      * avoid using it
      *
@@ -48,15 +71,9 @@ class SecretRedirect {
      */
     function request($url, array $context = []) {
         $clientIp = $this->vserver('REMOTE_ADDR');
+
         if ($this->serverUsesXHttpForwardedFor) {
-            if (function_exists('apache_request_headers')) {
-                $requestHeaders = apache_request_headers();
-                if (isset($requestHeaders['X-Forwarded-For'])) {
-                    $clientIp = $requestHeaders['X-Forwarded-For'];
-                }
-            } else if ($this->vserver('HTTP_X_FORWARDED_FOR')) {
-                $clientIp = $this->vserver('HTTP_X_FORWARDED_FOR');
-            }
+            $clientIp = $this->forwardedClientIp() ?: $clientIp;
         }
 
         $cookies = [];
