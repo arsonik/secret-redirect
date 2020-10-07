@@ -111,25 +111,28 @@ class SecretRedirect {
             'data' => null,
             'metas' => null,
         ];
-        $stream = @fopen($url, "r", false, $context);
-        if ($stream) {
-            $result['metas'] = stream_get_meta_data($stream);
-            $result['data'] = stream_get_contents($stream);
-            fclose($stream);
+        try {
+            $stream = @fopen($url, "r", false, $context);
+            if ($stream) {
+                $result['metas'] = stream_get_meta_data($stream);
+                $result['data'] = stream_get_contents($stream);
+                fclose($stream);
 
-            if ($this->forwardCookies) {
-                $result['cookies'] = [];
-                // Loop through headers
-                foreach ($this->extractHeaders($result['metas'], 'Set-Cookie') as $header) {
-                    // remove domain specific cookie
-                    $header = preg_replace('/[Dd]omain=[^;]+(;\s*|$)/', '', $header);
-                    // remove Secure, HttpOnly attributes
-                    $header = preg_replace('/(Secure|HttpOnly)(;\s*|$)/', '', $header);
-                    $result['cookies'][] = $header;
+                if ($this->forwardCookies) {
+                    $result['cookies'] = [];
+                    // Loop through headers
+                    foreach ($this->extractHeaders($result['metas'], 'Set-Cookie') as $header) {
+                        // remove domain specific cookie
+                        $header = preg_replace('/[Dd]omain=[^;]+(;\s*|$)/', '', $header);
+                        // remove Secure, HttpOnly attributes
+                        $header = preg_replace('/(Secure|HttpOnly)(;\s*|$)/', '', $header);
+                        $result['cookies'][] = $header;
 
-                    header(str_replace('Set-Cookie: ', 'Set-Cookie: '. $this->cookiePrefix, $header), false);
+                        header(str_replace('Set-Cookie: ', 'Set-Cookie: ' . $this->cookiePrefix, $header), false);
+                    }
                 }
             }
+        } catch (\Exception $e) {
         }
 
         return $result;
